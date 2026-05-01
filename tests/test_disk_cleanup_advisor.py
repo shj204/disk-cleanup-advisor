@@ -8,7 +8,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
-from disk_cleanup_advisor.cli import AdvisorError, build_report, delete_items, load_report, write_reports
+from disk_cleanup_advisor.cli import AdvisorError, build_parser, build_report, delete_items, load_report, write_reports
 
 
 class DiskCleanupAdvisorTests(unittest.TestCase):
@@ -51,6 +51,8 @@ class DiskCleanupAdvisorTests(unittest.TestCase):
             self.assertTrue(outputs["json"].exists())
             self.assertTrue(outputs["csv"].exists())
             self.assertTrue(outputs["html"].exists())
+            self.assertIn("分类", outputs["csv"].read_text(encoding="utf-8-sig").splitlines()[0])
+            self.assertIn("磁盘清理建议报告", outputs["html"].read_text(encoding="utf-8"))
 
             loaded = load_report(outputs["json"])
             self.assertEqual(loaded["scan"]["file_count"], 4)
@@ -96,7 +98,12 @@ class DiskCleanupAdvisorTests(unittest.TestCase):
         serialized = json.dumps(data, ensure_ascii=False)
         self.assertEqual(data["scan"]["root"], "E:\\ExampleDrive")
         self.assertNotIn("CodexTasks", serialized)
-        self.assertNotIn("Users\\21332", serialized)
+        self.assertNotIn(str(Path.home()), serialized)
+
+    def test_scan_path_defaults_to_drive_selection(self):
+        parser = build_parser()
+        args = parser.parse_args(["scan", "--out", "reports"])
+        self.assertIsNone(args.path)
 
 
 if __name__ == "__main__":

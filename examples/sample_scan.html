@@ -1,8 +1,8 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="utf-8">
-  <title>Sample Disk Cleanup Advisor Report</title>
+  <title>示例磁盘清理建议报告</title>
   <style>
     body { font-family: Segoe UI, Arial, sans-serif; margin: 24px; color: #17202a; background: #f7f9fb; }
     main { max-width: 980px; margin: 0 auto; }
@@ -13,16 +13,16 @@
 </head>
 <body>
 <main>
-  <h1>Sample Disk Cleanup Advisor Report</h1>
-  <p>Root: <code>E:\ExampleDrive</code>. This sample is synthetic and does not contain real user paths.</p>
+  <h1>示例磁盘清理建议报告</h1>
+  <p>扫描位置：<code>E:\ExampleDrive</code>。这是脱敏示例，不包含真实用户路径。</p>
   <table>
     <thead>
-      <tr><th>ID</th><th>Category</th><th>Size</th><th>Reason</th><th>Path</th></tr>
+      <tr><th>ID</th><th>分类</th><th>大小</th><th>原因</th><th>路径</th></tr>
     </thead>
     <tbody>
-      <tr><td>f_sample000001</td><td>review</td><td>900.0 MB</td><td>installer/archive image; often removable after use</td><td>E:\ExampleDrive\Downloads\old-installer.iso</td></tr>
-      <tr><td>f_sample000003</td><td>delete_candidate</td><td>120.0 MB</td><td>cache, temporary, log, or recycle-bin-like content</td><td>E:\ExampleDrive\cache\render-cache.tmp</td></tr>
-      <tr><td>f_sample000004</td><td>keep</td><td>57.2 MB</td><td>document, source, or work area</td><td>E:\ExampleDrive\Work\budget.xlsx</td></tr>
+      <tr><td>f_sample000001</td><td>人工检查</td><td>900.0 MB</td><td>安装包、压缩包或镜像文件，使用后通常可清理</td><td>E:\ExampleDrive\Downloads\old-installer.iso</td></tr>
+      <tr><td>f_sample000003</td><td>可删除候选</td><td>120.0 MB</td><td>缓存、临时文件、日志或类似回收站的内容</td><td>E:\ExampleDrive\cache\render-cache.tmp</td></tr>
+      <tr><td>f_sample000004</td><td>建议保留</td><td>57.2 MB</td><td>文档、源码或工作资料</td><td>E:\ExampleDrive\Work\budget.xlsx</td></tr>
     </tbody>
   </table>
 </main>

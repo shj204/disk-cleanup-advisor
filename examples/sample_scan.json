@@ -40,7 +40,7 @@
       "size_human": "1.3 GB",
       "files": 2,
       "category": "review",
-      "reason": "download area; confirm whether the files are still needed",
+      "reason": "下载目录，请确认文件是否还需要",
       "protected": false
     },
     {
@@ -49,7 +49,7 @@
       "size_human": "150.0 MB",
       "files": 2,
       "category": "delete_candidate",
-      "reason": "cache, temporary, log, or recycle-bin-like content",
+      "reason": "缓存、临时文件、日志或类似回收站的内容",
       "protected": false
     },
     {
@@ -58,7 +58,7 @@
       "size_human": "57.2 MB",
       "files": 1,
       "category": "keep",
-      "reason": "document, source, or work area",
+      "reason": "文档、源码或工作资料",
       "protected": false
     }
   ],
@@ -92,7 +92,7 @@
       "modified_ns": 1736474400000000000,
       "extension": ".iso",
       "category": "review",
-      "reason": "installer/archive image; often removable after use",
+      "reason": "安装包、压缩包或镜像文件，使用后通常可清理",
       "protected": false
     },
     {
@@ -104,7 +104,7 @@
       "modified_ns": 1758191400000000000,
       "extension": ".zip",
       "category": "review",
-      "reason": "installer/archive image; often removable after use",
+      "reason": "安装包、压缩包或镜像文件，使用后通常可清理",
       "protected": false
     },
     {
@@ -116,7 +116,7 @@
       "modified_ns": 1776646800000000000,
       "extension": ".tmp",
       "category": "delete_candidate",
-      "reason": "cache, temporary, log, or recycle-bin-like content",
+      "reason": "缓存、临时文件、日志或类似回收站的内容",
       "protected": false
     },
     {
@@ -128,7 +128,7 @@
       "modified_ns": 1777467600000000000,
       "extension": ".xlsx",
       "category": "keep",
-      "reason": "document, source, or work area",
+      "reason": "文档、源码或工作资料",
       "protected": false
     }
   ],

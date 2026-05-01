@@ -6,6 +6,7 @@ import hashlib
 import html
 import json
 import os
+import shutil
 import stat
 import sys
 import time
@@ -18,10 +19,41 @@ from . import __version__
 
 
 CONFIRM_TOKEN = "PERMANENT-DELETE"
-DEFAULT_SCAN_ROOT = Path(r"E:\\" if os.name == "nt" else ".")
 DEFAULT_REPORT_DIR = Path(r"E:\CodexTasks\reports" if os.name == "nt" else "reports")
 DEFAULT_LOG_DIR = Path(r"E:\CodexTasks\trash_logs" if os.name == "nt" else "trash_logs")
 FILE_ATTRIBUTE_REPARSE_POINT = 0x400
+
+CATEGORY_LABELS = {
+    "never_delete": "不要动",
+    "keep": "建议保留",
+    "review": "人工检查",
+    "delete_candidate": "可删除候选",
+}
+
+REASON_TRANSLATIONS = {
+    "protected Windows/system path": "Windows 或系统保护路径",
+    "cache, temporary, log, or recycle-bin-like content": "缓存、临时文件、日志或类似回收站的内容",
+    "rebuildable dependency or build output; confirm before deleting": "依赖目录或构建产物，删除前请确认可重新生成",
+    "download area; confirm whether the files are still needed": "下载目录，请确认文件是否还需要",
+    "installer/archive image; often removable after use": "安装包、压缩包或镜像文件，使用后通常可清理",
+    "application or game directory; uninstall through the app/store when possible": "应用或游戏目录，建议通过软件或平台卸载",
+    "document, source, or work area": "文档、源码或工作资料",
+    "large file older than 180 days": "超过 180 天未修改的大文件",
+    "unknown content; inspect before deleting": "未知内容，删除前请先查看",
+}
+
+CSV_COLUMNS = [
+    ("id", "ID"),
+    ("category_label", "分类"),
+    ("category", "分类代码"),
+    ("size_human", "大小"),
+    ("size", "字节数"),
+    ("modified", "修改时间"),
+    ("extension", "扩展名"),
+    ("protected_label", "受保护"),
+    ("reason", "原因"),
+    ("path", "路径"),
+]
 
 PROTECTED_NAMES = {
     "$windows.~bt",
@@ -147,6 +179,12 @@ class AdvisorError(Exception):
     """Expected CLI error with a user-facing message."""
 
 
+def configure_stdio() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+
+
 def now_local_iso() -> str:
     return datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
 
@@ -179,30 +217,30 @@ def classify_path(path: Path, *, is_dir: bool, size: int, mtime: float) -> tuple
     age_days = max(0.0, (time.time() - mtime) / 86400) if mtime else 0.0
 
     if protected:
-        return "never_delete", "protected Windows/system path", True
+        return "never_delete", "Windows 或系统保护路径", True
 
     if contains_any_name(path, CACHE_NAMES) or suffix in TEMP_SUFFIXES or name.endswith(".tmp"):
-        return "delete_candidate", "cache, temporary, log, or recycle-bin-like content", False
+        return "delete_candidate", "缓存、临时文件、日志或类似回收站的内容", False
 
     if contains_any_name(path, REVIEW_REBUILDABLE_NAMES):
-        return "review", "rebuildable dependency or build output; confirm before deleting", False
+        return "review", "依赖目录或构建产物，删除前请确认可重新生成", False
 
     if contains_any_name(path, DOWNLOAD_NAMES):
-        return "review", "download area; confirm whether the files are still needed", False
+        return "review", "下载目录，请确认文件是否还需要", False
 
     if suffix in REVIEW_SUFFIXES:
-        return "review", "installer/archive image; often removable after use", False
+        return "review", "安装包、压缩包或镜像文件，使用后通常可清理", False
 
     if contains_any_name(path, PROGRAM_OR_APP_NAMES):
-        return "keep", "application or game directory; uninstall through the app/store when possible", False
+        return "keep", "应用或游戏目录，建议通过软件或平台卸载", False
 
     if contains_any_name(path, KEEP_NAMES) or suffix in DOCUMENT_SUFFIXES:
-        return "keep", "document, source, or work area", False
+        return "keep", "文档、源码或工作资料", False
 
     if not is_dir and size >= 1024**3 and age_days >= 180:
-        return "review", "large file older than 180 days", False
+        return "review", "超过 180 天未修改的大文件", False
 
-    return "review", "unknown content; inspect before deleting", False
+    return "review", "未知内容，删除前请先查看", False
 
 
 def file_id(path: Path, size: int, modified_ns: int) -> str:
@@ -217,6 +255,18 @@ def display_size(size: int) -> str:
             return f"{value:.1f} {unit}" if unit != "B" else f"{int(value)} B"
         value /= 1024
     return f"{size} B"
+
+
+def category_label(category: str) -> str:
+    return CATEGORY_LABELS.get(category, category)
+
+
+def bool_label(value: bool) -> str:
+    return "是" if value else "否"
+
+
+def display_reason(reason: str) -> str:
+    return REASON_TRANSLATIONS.get(reason, reason)
 
 
 def safe_relative_parts(path: Path, root: Path) -> tuple[str, ...]:
@@ -248,12 +298,63 @@ def bucket_path(root: Path, bucket: str) -> Path:
     return root if bucket == "<root files>" else root / bucket
 
 
+def available_drive_roots() -> list[Path]:
+    if os.name != "nt":
+        return [Path(".").resolve()]
+    drives: list[Path] = []
+    for letter in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
+        root = Path(f"{letter}:\\")
+        if root.exists():
+            drives.append(root)
+    return drives
+
+
+def choose_scan_root() -> Path:
+    drives = available_drive_roots()
+    if not drives:
+        return Path(".").resolve()
+
+    if not sys.stdin.isatty():
+        preferred = Path("E:\\")
+        return preferred if preferred.exists() else drives[0]
+
+    print("请选择要扫描的盘符：")
+    for index, drive in enumerate(drives, start=1):
+        try:
+            usage = shutil.disk_usage(drive)
+        except OSError:
+            usage = None
+        detail = ""
+        if usage is not None:
+            detail = f" 可用 {display_size(usage.free)} / 总计 {display_size(usage.total)}"
+        print(f"  {index}. {drive}{detail}")
+
+    default_index = next((i for i, drive in enumerate(drives, start=1) if str(drive).upper().startswith("E:\\")), 1)
+    raw = input(f"输入编号或盘符，直接回车默认 {drives[default_index - 1]}：").strip()
+    if not raw:
+        return drives[default_index - 1]
+
+    if raw.isdigit():
+        selected = int(raw)
+        if 1 <= selected <= len(drives):
+            return drives[selected - 1]
+        raise AdvisorError(f"无效编号：{raw}")
+
+    candidate = raw.upper().rstrip("\\/")
+    if len(candidate) == 1 and candidate.isalpha():
+        candidate = f"{candidate}:"
+    root = Path(candidate + "\\" if candidate.endswith(":") else candidate)
+    if not root.exists():
+        raise AdvisorError(f"盘符或路径不存在：{root}")
+    return root
+
+
 def build_report(root: Path, *, min_size_mb: float = 1.0) -> dict[str, Any]:
     root = root.expanduser().resolve(strict=False)
     if not root.exists():
-        raise AdvisorError(f"Scan path does not exist: {root}")
+        raise AdvisorError(f"扫描路径不存在：{root}")
     if not root.is_dir():
-        raise AdvisorError(f"Scan path must be a directory: {root}")
+        raise AdvisorError(f"扫描路径必须是目录：{root}")
 
     started = time.time()
     min_size = int(max(0.0, min_size_mb) * 1024 * 1024)
@@ -414,23 +515,14 @@ def write_reports(report: dict[str, Any], output_dir: Path) -> dict[str, Path]:
     json_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
 
     with csv_path.open("w", newline="", encoding="utf-8-sig") as handle:
-        writer = csv.DictWriter(
-            handle,
-            fieldnames=[
-                "id",
-                "category",
-                "size_human",
-                "size",
-                "modified",
-                "extension",
-                "protected",
-                "reason",
-                "path",
-            ],
-        )
+        writer = csv.DictWriter(handle, fieldnames=[label for _, label in CSV_COLUMNS])
         writer.writeheader()
         for item in report["items"]:
-            writer.writerow({key: item.get(key, "") for key in writer.fieldnames})
+            row = dict(item)
+            row["category_label"] = category_label(str(item.get("category", "")))
+            row["protected_label"] = bool_label(bool(item.get("protected", False)))
+            row["reason"] = display_reason(str(item.get("reason", "")))
+            writer.writerow({label: row.get(key, "") for key, label in CSV_COLUMNS})
 
     html_path.write_text(render_html(report), encoding="utf-8")
     return {"json": json_path, "csv": csv_path, "html": html_path}
@@ -442,16 +534,17 @@ def render_html(report: dict[str, Any]) -> str:
     def esc(value: Any) -> str:
         return html.escape(str(value))
 
-    def table(headers: list[str], rows: list[dict[str, Any]], limit: int = 100) -> str:
-        head = "".join(f"<th>{esc(header)}</th>" for header in headers)
+    def table(columns: list[tuple[str, str]], rows: list[dict[str, Any]], limit: int = 100) -> str:
+        head = "".join(f"<th>{esc(label)}</th>" for _, label in columns)
         body_rows = []
         for row in rows[:limit]:
-            cells = "".join(f"<td>{esc(row.get(header, ''))}</td>" for header in headers)
+            cells = "".join(f"<td>{esc(row.get(key, ''))}</td>" for key, _ in columns)
             body_rows.append(f"<tr>{cells}</tr>")
         return f"<table><thead><tr>{head}</tr></thead><tbody>{''.join(body_rows)}</tbody></table>"
 
     category_rows = [
         {
+            "label": category_label(row["category"]),
             "category": row["category"],
             "size": row["size_human"],
             "files": row["files"],
@@ -460,10 +553,10 @@ def render_html(report: dict[str, Any]) -> str:
     ]
     directory_rows = [
         {
-            "category": row["category"],
+            "category": category_label(row["category"]),
             "size": row["size_human"],
             "files": row["files"],
-            "reason": row["reason"],
+            "reason": display_reason(row["reason"]),
             "path": row["path"],
         }
         for row in report["directories"]
@@ -471,10 +564,10 @@ def render_html(report: dict[str, Any]) -> str:
     item_rows = [
         {
             "id": row["id"],
-            "category": row["category"],
+            "category": category_label(row["category"]),
             "size": row["size_human"],
             "modified": row["modified"],
-            "reason": row["reason"],
+            "reason": display_reason(row["reason"]),
             "path": row["path"],
         }
         for row in report["items"]
@@ -496,11 +589,11 @@ def render_html(report: dict[str, Any]) -> str:
     ]
 
     return f"""<!doctype html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Disk Cleanup Advisor Report</title>
+  <title>磁盘清理建议报告</title>
   <style>
     body {{ font-family: Segoe UI, Arial, sans-serif; margin: 24px; color: #17202a; background: #f7f9fb; }}
     main {{ max-width: 1180px; margin: 0 auto; }}
@@ -520,40 +613,40 @@ def render_html(report: dict[str, Any]) -> str:
 </head>
 <body>
 <main>
-  <h1>Disk Cleanup Advisor Report</h1>
-  <p class="note">Root: <code>{esc(scan["root"])}</code> | Created: {esc(scan["created_at"])}</p>
+  <h1>磁盘清理建议报告</h1>
+  <p class="note">扫描位置：<code>{esc(scan["root"])}</code> | 生成时间：{esc(scan["created_at"])}</p>
   <div class="cards">
-    <div class="card"><div class="value">{esc(scan["total_size_human"])}</div><div class="label">Total scanned size</div></div>
-    <div class="card"><div class="value">{esc(scan["file_count"])}</div><div class="label">Files scanned</div></div>
-    <div class="card"><div class="value">{esc(scan["reported_item_count"])}</div><div class="label">Reported file items</div></div>
-    <div class="card"><div class="value">{esc(scan["error_count"])}</div><div class="label">Skipped/error paths</div></div>
+    <div class="card"><div class="value">{esc(scan["total_size_human"])}</div><div class="label">已扫描文件总量</div></div>
+    <div class="card"><div class="value">{esc(scan["file_count"])}</div><div class="label">已扫描文件数</div></div>
+    <div class="card"><div class="value">{esc(scan["reported_item_count"])}</div><div class="label">报告列出的文件数</div></div>
+    <div class="card"><div class="value">{esc(scan["error_count"])}</div><div class="label">跳过或无法访问路径</div></div>
   </div>
 
   <section>
-    <h2>Category Summary</h2>
-    {table(["category", "size", "files"], category_rows)}
+    <h2>分类汇总</h2>
+    {table([("label", "分类"), ("category", "分类代码"), ("size", "大小"), ("files", "文件数")], category_rows)}
   </section>
 
   <section>
-    <h2>Largest Top-Level Areas</h2>
-    {table(["category", "size", "files", "reason", "path"], directory_rows)}
+    <h2>最大顶层目录</h2>
+    {table([("category", "分类"), ("size", "大小"), ("files", "文件数"), ("reason", "原因"), ("path", "路径")], directory_rows)}
   </section>
 
   <section>
-    <h2>Largest Extensions</h2>
-    {table(["extension", "size", "files"], extension_rows, limit=50)}
+    <h2>最大文件类型</h2>
+    {table([("extension", "扩展名"), ("size", "大小"), ("files", "文件数")], extension_rows, limit=50)}
   </section>
 
   <section>
-    <h2>Largest Reported Files</h2>
-    <p class="note">Only file IDs listed here can be passed to the delete command. Permanent deletion still requires <code>{CONFIRM_TOKEN}</code>.</p>
-    {table(["id", "category", "size", "modified", "reason", "path"], item_rows)}
+    <h2>报告列出的大文件</h2>
+    <p class="note">只有这里列出的文件 ID 可以传给删除命令。永久删除仍然必须输入确认词 <code>{CONFIRM_TOKEN}</code>。</p>
+    {table([("id", "ID"), ("category", "分类"), ("size", "大小"), ("modified", "修改时间"), ("reason", "原因"), ("path", "路径")], item_rows)}
   </section>
 
   <section>
-    <h2>Skipped Or Inaccessible Paths</h2>
-    <p class="note">If Windows reports more used space than this scan totals, these paths and protected system storage are the first places to investigate.</p>
-    {table(["path", "error"], error_rows, limit=100)}
+    <h2>跳过或无法访问的路径</h2>
+    <p class="note">如果 Windows 显示的已用空间明显大于本报告扫描到的总量，优先检查这些路径、权限受限目录和系统保护存储。</p>
+    {table([("path", "路径"), ("error", "错误")], error_rows, limit=100)}
   </section>
 </main>
 </body>
@@ -565,9 +658,9 @@ def load_report(input_path: Path) -> dict[str, Any]:
     try:
         return json.loads(input_path.read_text(encoding="utf-8"))
     except FileNotFoundError as exc:
-        raise AdvisorError(f"Report not found: {input_path}") from exc
+        raise AdvisorError(f"找不到报告：{input_path}") from exc
     except json.JSONDecodeError as exc:
-        raise AdvisorError(f"Invalid JSON report: {input_path}") from exc
+        raise AdvisorError(f"JSON 报告无效：{input_path}") from exc
 
 
 def delete_items(
@@ -579,12 +672,12 @@ def delete_items(
     log_dir: Path | None = None,
 ) -> dict[str, Any]:
     if not ids:
-        raise AdvisorError("No item IDs were supplied.")
+        raise AdvisorError("没有提供文件 ID。")
 
     by_id = {item["id"]: item for item in report.get("items", [])}
     missing = [item_id for item_id in ids if item_id not in by_id]
     if missing:
-        raise AdvisorError("IDs are not present in the scan report: " + ", ".join(missing))
+        raise AdvisorError("这些 ID 不在扫描报告中：" + ", ".join(missing))
 
     blockers: list[str] = []
     targets: list[dict[str, Any]] = []
@@ -593,27 +686,27 @@ def delete_items(
         path = Path(item["path"])
 
         if item.get("protected") or item.get("category") == "never_delete" or is_protected_path(path):
-            blockers.append(f"{item_id}: protected path {path}")
+            blockers.append(f"{item_id}: 受保护路径 {path}")
             continue
 
         if not path.exists():
-            blockers.append(f"{item_id}: file no longer exists {path}")
+            blockers.append(f"{item_id}: 文件已经不存在 {path}")
             continue
 
         if not path.is_file():
-            blockers.append(f"{item_id}: only files can be deleted by this tool {path}")
+            blockers.append(f"{item_id}: 当前工具只删除文件，不删除目录 {path}")
             continue
 
         try:
             st = path.stat()
         except OSError as exc:
-            blockers.append(f"{item_id}: cannot stat {path}: {exc}")
+            blockers.append(f"{item_id}: 无法读取文件状态 {path}: {exc}")
             continue
 
         current_size = int(st.st_size)
         current_modified_ns = int(getattr(st, "st_mtime_ns", int(st.st_mtime * 1_000_000_000)))
         if current_size != int(item.get("size", -1)) or current_modified_ns != int(item.get("modified_ns", -1)):
-            blockers.append(f"{item_id}: file changed since scan {path}")
+            blockers.append(f"{item_id}: 文件在扫描后发生变化 {path}")
             continue
 
         targets.append(
@@ -628,7 +721,7 @@ def delete_items(
         )
 
     if blockers:
-        raise AdvisorError("Deletion blocked:\n" + "\n".join(blockers))
+        raise AdvisorError("删除已阻止：\n" + "\n".join(blockers))
 
     total_size = sum(target["size"] for target in targets)
     result = {
@@ -643,7 +736,7 @@ def delete_items(
         return result
 
     if confirm != CONFIRM_TOKEN:
-        raise AdvisorError(f"Permanent deletion requires --confirm {CONFIRM_TOKEN}")
+        raise AdvisorError(f"永久删除需要 --confirm {CONFIRM_TOKEN}")
 
     deleted: list[dict[str, Any]] = []
     for target in targets:
@@ -662,30 +755,32 @@ def delete_items(
 
 def print_summary(report: dict[str, Any]) -> None:
     scan = report["scan"]
-    print(f"Root: {scan['root']}")
-    print(f"Created: {scan['created_at']}")
-    print(f"Total: {scan['total_size_human']} across {scan['file_count']} files")
+    print(f"扫描位置：{scan['root']}")
+    print(f"生成时间：{scan['created_at']}")
+    print(f"总计：{scan['total_size_human']}，共 {scan['file_count']} 个文件")
     print("")
-    print("By category:")
+    print("按分类：")
     for row in report.get("categories", []):
-        print(f"  {row['category']:<18} {row['size_human']:>10}  {row['files']} files")
+        label = category_label(row["category"])
+        print(f"  {label:<10} {row['size_human']:>10}  {row['files']} 个文件")
     print("")
-    print("Largest top-level areas:")
+    print("最大顶层目录：")
     for row in report.get("directories", [])[:15]:
-        print(f"  {row['size_human']:>10}  {row['category']:<16}  {row['path']}")
+        print(f"  {row['size_human']:>10}  {category_label(row['category']):<10}  {row['path']}")
     if report.get("errors"):
         print("")
-        print("Skipped or inaccessible paths:")
+        print("跳过或无法访问的路径：")
         for row in report["errors"][:10]:
             print(f"  {row['path']} | {row['error']}")
 
 
 def command_scan(args: argparse.Namespace) -> int:
-    report = build_report(args.path, min_size_mb=args.min_size_mb)
+    scan_path = args.path if args.path is not None else choose_scan_root()
+    report = build_report(scan_path, min_size_mb=args.min_size_mb)
     outputs = write_reports(report, args.out)
     print_summary(report)
     print("")
-    print("Wrote reports:")
+    print("已写入报告：")
     for kind, path in outputs.items():
         print(f"  {kind}: {path}")
     return 0
@@ -706,57 +801,58 @@ def command_delete(args: argparse.Namespace) -> int:
         confirm=args.confirm,
         log_dir=args.log_dir if args.apply else None,
     )
-    action = "Deleted" if args.apply else "Dry run"
-    print(f"{action}: {len(result['targets'])} file(s), {result['total_size_human']}")
+    action = "已永久删除" if args.apply else "删除预演"
+    print(f"{action}：{len(result['targets'])} 个文件，{result['total_size_human']}")
     for target in result["targets"]:
         print(f"  {target['id']}  {target['size_human']}  {target['path']}")
     if args.apply and result.get("log_path"):
-        print(f"Deletion log: {result['log_path']}")
+        print(f"删除日志：{result['log_path']}")
     if not args.apply:
-        print(f"Nothing was deleted. Add --apply --confirm {CONFIRM_TOKEN} to permanently delete these files.")
+        print(f"没有删除任何文件。若确认永久删除，请追加 --apply --confirm {CONFIRM_TOKEN}。")
     return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="disk-cleanup-advisor",
-        description="Scan a disk, write cleanup reports, and gate permanent deletion behind explicit confirmation.",
+        description="扫描磁盘、生成清理建议报告，并把永久删除放在显式确认之后。",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    scan = subparsers.add_parser("scan", help="scan a directory and write JSON/CSV/HTML reports")
-    scan.add_argument("--path", type=Path, default=DEFAULT_SCAN_ROOT, help=f"path to scan, default: {DEFAULT_SCAN_ROOT}")
-    scan.add_argument("--out", type=Path, default=DEFAULT_REPORT_DIR, help=f"report directory, default: {DEFAULT_REPORT_DIR}")
+    scan = subparsers.add_parser("scan", help="扫描目录并写入 JSON/CSV/HTML 报告")
+    scan.add_argument("--path", type=Path, help="要扫描的路径；不传时会让你选择盘符")
+    scan.add_argument("--out", type=Path, default=DEFAULT_REPORT_DIR, help=f"报告目录，默认：{DEFAULT_REPORT_DIR}")
     scan.add_argument(
         "--min-size-mb",
         type=float,
         default=1.0,
-        help="minimum file size to list individually; directory totals still include every file",
+        help="单独列入报告的最小文件大小，目录汇总仍包含所有文件",
     )
     scan.set_defaults(func=command_scan)
 
-    summary = subparsers.add_parser("summary", help="print a summary from scan.json")
-    summary.add_argument("--input", type=Path, required=True, help="path to scan.json")
+    summary = subparsers.add_parser("summary", help="从 scan.json 打印中文摘要")
+    summary.add_argument("--input", type=Path, required=True, help="scan.json 路径")
     summary.set_defaults(func=command_summary)
 
-    delete = subparsers.add_parser("delete", help="dry-run or permanently delete files by report item ID")
-    delete.add_argument("--input", type=Path, required=True, help="path to scan.json")
-    delete.add_argument("--ids", nargs="+", required=True, help="file IDs from the report")
-    delete.add_argument("--apply", action="store_true", help="perform permanent deletion; without this, only previews")
-    delete.add_argument("--confirm", help=f"must be exactly {CONFIRM_TOKEN} when --apply is used")
-    delete.add_argument("--log-dir", type=Path, default=DEFAULT_LOG_DIR, help=f"deletion log directory, default: {DEFAULT_LOG_DIR}")
+    delete = subparsers.add_parser("delete", help="按报告 ID 预演或永久删除文件")
+    delete.add_argument("--input", type=Path, required=True, help="scan.json 路径")
+    delete.add_argument("--ids", nargs="+", required=True, help="报告里的文件 ID")
+    delete.add_argument("--apply", action="store_true", help="执行永久删除；不传时只预演")
+    delete.add_argument("--confirm", help=f"使用 --apply 时必须精确输入 {CONFIRM_TOKEN}")
+    delete.add_argument("--log-dir", type=Path, default=DEFAULT_LOG_DIR, help=f"删除日志目录，默认：{DEFAULT_LOG_DIR}")
     delete.set_defaults(func=command_delete)
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
+    configure_stdio()
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
         return int(args.func(args))
     except AdvisorError as exc:
-        print(f"ERROR: {exc}", file=sys.stderr)
+        print(f"错误：{exc}", file=sys.stderr)
         return 2
     except KeyboardInterrupt:
-        print("Interrupted.", file=sys.stderr)
+        print("已中断。", file=sys.stderr)
         return 130

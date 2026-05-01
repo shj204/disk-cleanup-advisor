@@ -1,5 +1,5 @@
-id,category,size_human,size,modified,extension,protected,reason,path
-f_sample000001,review,900.0 MB,943718400,2025-01-10T10:00:00,.iso,False,installer/archive image; often removable after use,E:\ExampleDrive\Downloads\old-installer.iso
-f_sample000002,review,400.0 MB,419430400,2025-09-18T18:30:00,.zip,False,installer/archive image; often removable after use,E:\ExampleDrive\Downloads\archive.zip
-f_sample000003,delete_candidate,120.0 MB,125829120,2026-04-20T09:00:00,.tmp,False,cache temporary or log content,E:\ExampleDrive\cache\render-cache.tmp
-f_sample000004,keep,57.2 MB,59968832,2026-04-29T21:00:00,.xlsx,False,document source or work area,E:\ExampleDrive\Work\budget.xlsx
+ID,分类,分类代码,大小,字节数,修改时间,扩展名,受保护,原因,路径
+f_sample000001,人工检查,review,900.0 MB,943718400,2025-01-10T10:00:00,.iso,否,安装包、压缩包或镜像文件，使用后通常可清理,E:\ExampleDrive\Downloads\old-installer.iso
+f_sample000002,人工检查,review,400.0 MB,419430400,2025-09-18T18:30:00,.zip,否,安装包、压缩包或镜像文件，使用后通常可清理,E:\ExampleDrive\Downloads\archive.zip
+f_sample000003,可删除候选,delete_candidate,120.0 MB,125829120,2026-04-20T09:00:00,.tmp,否,缓存、临时文件、日志或类似回收站的内容,E:\ExampleDrive\cache\render-cache.tmp
+f_sample000004,建议保留,keep,57.2 MB,59968832,2026-04-29T21:00:00,.xlsx,否,文档、源码或工作资料,E:\ExampleDrive\Work\budget.xlsx
