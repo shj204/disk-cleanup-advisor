@@ -1,0 +1,27 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+.venv/
+venv/
+env/
+
+build/
+dist/
+*.egg-info/
+
+# Real local scan output can expose private paths. Keep examples committed,
+# but do not commit generated reports from this machine.
+scan.json
+scan.csv
+scan.html
+reports/
+data/
+trash_logs/
+tmp/
+*.log

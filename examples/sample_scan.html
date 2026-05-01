@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Sample Disk Cleanup Advisor Report</title>
+  <style>
+    body { font-family: Segoe UI, Arial, sans-serif; margin: 24px; color: #17202a; background: #f7f9fb; }
+    main { max-width: 980px; margin: 0 auto; }
+    table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #d9e2ec; }
+    th, td { padding: 9px 10px; border-bottom: 1px solid #e6edf3; text-align: left; font-size: 13px; }
+    th { background: #edf2f7; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Sample Disk Cleanup Advisor Report</h1>
+  <p>Root: <code>E:\ExampleDrive</code>. This sample is synthetic and does not contain real user paths.</p>
+  <table>
+    <thead>
+      <tr><th>ID</th><th>Category</th><th>Size</th><th>Reason</th><th>Path</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>f_sample000001</td><td>review</td><td>900.0 MB</td><td>installer/archive image; often removable after use</td><td>E:\ExampleDrive\Downloads\old-installer.iso</td></tr>
+      <tr><td>f_sample000003</td><td>delete_candidate</td><td>120.0 MB</td><td>cache, temporary, log, or recycle-bin-like content</td><td>E:\ExampleDrive\cache\render-cache.tmp</td></tr>
+      <tr><td>f_sample000004</td><td>keep</td><td>57.2 MB</td><td>document, source, or work area</td><td>E:\ExampleDrive\Work\budget.xlsx</td></tr>
+    </tbody>
+  </table>
+</main>
+</body>
+</html>

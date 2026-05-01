@@ -1,0 +1,136 @@
+{
+  "tool": "disk-cleanup-advisor",
+  "version": "0.1.0",
+  "scan": {
+    "root": "E:\\ExampleDrive",
+    "created_at": "2026-05-02T12:00:00+08:00",
+    "duration_seconds": 0.12,
+    "min_reported_file_size_mb": 1.0,
+    "total_size": 1999634432,
+    "total_size_human": "1.9 GB",
+    "file_count": 6,
+    "dir_count": 4,
+    "reported_item_count": 4,
+    "error_count": 0
+  },
+  "categories": [
+    {
+      "category": "review",
+      "size": 1782579200,
+      "size_human": "1.7 GB",
+      "files": 3
+    },
+    {
+      "category": "delete_candidate",
+      "size": 157286400,
+      "size_human": "150.0 MB",
+      "files": 2
+    },
+    {
+      "category": "keep",
+      "size": 59968832,
+      "size_human": "57.2 MB",
+      "files": 1
+    }
+  ],
+  "directories": [
+    {
+      "path": "E:\\ExampleDrive\\Downloads",
+      "size": 1363148800,
+      "size_human": "1.3 GB",
+      "files": 2,
+      "category": "review",
+      "reason": "download area; confirm whether the files are still needed",
+      "protected": false
+    },
+    {
+      "path": "E:\\ExampleDrive\\cache",
+      "size": 157286400,
+      "size_human": "150.0 MB",
+      "files": 2,
+      "category": "delete_candidate",
+      "reason": "cache, temporary, log, or recycle-bin-like content",
+      "protected": false
+    },
+    {
+      "path": "E:\\ExampleDrive\\Work",
+      "size": 59968832,
+      "size_human": "57.2 MB",
+      "files": 1,
+      "category": "keep",
+      "reason": "document, source, or work area",
+      "protected": false
+    }
+  ],
+  "extensions": [
+    {
+      "extension": ".iso",
+      "size": 943718400,
+      "size_human": "900.0 MB",
+      "files": 1
+    },
+    {
+      "extension": ".zip",
+      "size": 419430400,
+      "size_human": "400.0 MB",
+      "files": 1
+    },
+    {
+      "extension": ".tmp",
+      "size": 157286400,
+      "size_human": "150.0 MB",
+      "files": 2
+    }
+  ],
+  "items": [
+    {
+      "id": "f_sample000001",
+      "path": "E:\\ExampleDrive\\Downloads\\old-installer.iso",
+      "size": 943718400,
+      "size_human": "900.0 MB",
+      "modified": "2025-01-10T10:00:00",
+      "modified_ns": 1736474400000000000,
+      "extension": ".iso",
+      "category": "review",
+      "reason": "installer/archive image; often removable after use",
+      "protected": false
+    },
+    {
+      "id": "f_sample000002",
+      "path": "E:\\ExampleDrive\\Downloads\\archive.zip",
+      "size": 419430400,
+      "size_human": "400.0 MB",
+      "modified": "2025-09-18T18:30:00",
+      "modified_ns": 1758191400000000000,
+      "extension": ".zip",
+      "category": "review",
+      "reason": "installer/archive image; often removable after use",
+      "protected": false
+    },
+    {
+      "id": "f_sample000003",
+      "path": "E:\\ExampleDrive\\cache\\render-cache.tmp",
+      "size": 125829120,
+      "size_human": "120.0 MB",
+      "modified": "2026-04-20T09:00:00",
+      "modified_ns": 1776646800000000000,
+      "extension": ".tmp",
+      "category": "delete_candidate",
+      "reason": "cache, temporary, log, or recycle-bin-like content",
+      "protected": false
+    },
+    {
+      "id": "f_sample000004",
+      "path": "E:\\ExampleDrive\\Work\\budget.xlsx",
+      "size": 59968832,
+      "size_human": "57.2 MB",
+      "modified": "2026-04-29T21:00:00",
+      "modified_ns": 1777467600000000000,
+      "extension": ".xlsx",
+      "category": "keep",
+      "reason": "document, source, or work area",
+      "protected": false
+    }
+  ],
+  "errors": []
+}
