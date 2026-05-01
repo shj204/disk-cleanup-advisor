@@ -76,6 +76,13 @@ Safety gates:
 - Files are rejected if their size or modified timestamp changed after scanning.
 - This first version deletes files only, not whole directories.
 
+## Reading The Report
+
+If Windows shows much more used space than the report's total scanned size, check
+the `Skipped Or Inaccessible Paths` section in `scan.html`. Permission-protected
+backup folders, system storage, virtual disks, and recycle-bin accounts can hold
+large amounts of data that a normal user process cannot enumerate.
+
 ## Privacy Notes
 
 Real scan reports can expose private folder names and file paths. Do not commit

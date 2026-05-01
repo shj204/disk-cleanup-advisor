@@ -479,6 +479,13 @@ def render_html(report: dict[str, Any]) -> str:
         }
         for row in report["items"]
     ]
+    error_rows = [
+        {
+            "path": row.get("path", ""),
+            "error": row.get("error", ""),
+        }
+        for row in report.get("errors", [])
+    ]
     extension_rows = [
         {
             "extension": row["extension"],
@@ -541,6 +548,12 @@ def render_html(report: dict[str, Any]) -> str:
     <h2>Largest Reported Files</h2>
     <p class="note">Only file IDs listed here can be passed to the delete command. Permanent deletion still requires <code>{CONFIRM_TOKEN}</code>.</p>
     {table(["id", "category", "size", "modified", "reason", "path"], item_rows)}
+  </section>
+
+  <section>
+    <h2>Skipped Or Inaccessible Paths</h2>
+    <p class="note">If Windows reports more used space than this scan totals, these paths and protected system storage are the first places to investigate.</p>
+    {table(["path", "error"], error_rows, limit=100)}
   </section>
 </main>
 </body>
@@ -660,6 +673,11 @@ def print_summary(report: dict[str, Any]) -> None:
     print("Largest top-level areas:")
     for row in report.get("directories", [])[:15]:
         print(f"  {row['size_human']:>10}  {row['category']:<16}  {row['path']}")
+    if report.get("errors"):
+        print("")
+        print("Skipped or inaccessible paths:")
+        for row in report["errors"][:10]:
+            print(f"  {row['path']} | {row['error']}")
 
 
 def command_scan(args: argparse.Namespace) -> int:
